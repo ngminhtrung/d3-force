@@ -1,6 +1,6 @@
 # d3-force
 
-This module implements a [velocity Verlet](https://en.wikipedia.org/wiki/Verlet_integration) numerical integrator for simulating physical forces on particles. The simulation is simplified: it assumes a constant unit time step Δ*t* = 1 for each step, and a constant unit mass *m* = 1 for all particles. As a result, a force *F* acting on a particle is equivalent to a constant acceleration *a* over the time interval Δ*t*, and can be simulated simply by adding to the particle’s velocity, which is then added to the particle’s position.
+Module này sử dụng phương pháp "[velocity Verlet](https://en.wikipedia.org/wiki/Verlet_integration)" để mô phỏng lực tương tác giữa các phần tử. Mô phỏng này được đơn giản hóa: nó giả định bước thời gian không đổi Δ*t* = 1 cho mỗi thay đổi, và đơn vị khối lượng không đổi *m* = 1 cho tất cả các phần tử. Kết quả là: một lực *F* tác động lên một phần tử bằng với gia tốc không đổi *a* nhân với quãng thời gian Δ*t*, and can be simulated simply by adding to the particle’s velocity, which is then added to the particle’s position.
 
 In the domain of information visualization, physical simulations are useful for studying [networks](http://bl.ocks.org/mbostock/ad70335eeef6d167bc36fd3c04378048) and [hierarchies](http://bl.ocks.org/mbostock/95aa92e2f4e8345aaa55a4a94d41ce37)!
 
@@ -41,19 +41,47 @@ var simulation = d3.forceSimulation(nodes);
 
 <a name="forceSimulation" href="#forceSimulation">#</a> d3.<b>forceSimulation</b>([<i>nodes</i>]) [<>](https://github.com/d3/d3-force/blob/master/src/simulation.js "Source")
 
-Creates a new simulation with the specified array of [*nodes*](#simulation_nodes) and no [forces](#simulation_force). If *nodes* is not specified, it defaults to the empty array. The simulator [starts](#simulation_restart) automatically; use [*simulation*.on](#simulation_on) to listen for tick events as the simulation runs. If you wish to run the simulation manually instead, call [*simulation*.stop](#simulation_stop), and then call [*simulation*.tick](#simulation_tick) as desired.
+Đây là 1 method giúp tạo ra một 1 object lấy tên là "*simulation*" (nghĩa là "giả lập"). Method kia nhận tham số truyền vào là một mảng các [*nodes*](#simulation_nodes). Lúc này chưa cần truyền vào [lực](#simulation_force) tương tác. 
+
+Nếu người dùng không cung cấp mảng các *nodes*, chương trình sẽ mặc định coi đây là mảng rỗng. Mô phỏng này:
+- [bắt đầu](#simulation_restart) hoàn toàn tự động
+- có method [*simulation*.on](#simulation_on) để lắng nghe các sự kiện "tick" trong khi chạy. 
+
+Nếu muốn giả lập chạy thủ công, người dùng cần gọi [*simulation*.stop](#simulation_stop), rồi gọi tiếp [*simulation*.tick](#simulation_tick) khi cần.
 
 <a name="simulation_restart" href="#simulation_restart">#</a> <i>simulation</i>.<b>restart</b>() [<>](https://github.com/d3/d3-force/blob/master/src/simulation.js#L80 "Source")
 
-Restarts the simulation’s internal timer and returns the simulation. In conjunction with [*simulation*.alphaTarget](#simulation_alphaTarget) or [*simulation*.alpha](#simulation_alpha), this method can be used to “reheat” the simulation during interaction, such as when dragging a node, or to resume the simulation after temporarily pausing it with [*simulation*.stop](#simulation_stop).
+Tái khởi động bộ đếm thời gian để chạy lại mô phỏng rồi trả lại . Kết hợp với [*simulation*.alphaTarget](#simulation_alphaTarget) hoặc [*simulation*.alpha](#simulation_alpha), cách này được dùng để  “hâm nóng lại” mô phỏng khi có tương tác với người dùng, ví dụ:
+- người dùng kéo thả một node
+- người dùng tạm dừng mô phỏng thông qua [*simulation*.stop](#simulation_stop).
+
+Object "simulation* của d3-force sử dụng bộ đếm *timer* trong [d3-timer](https://github.com/d3/d3-timer). Bộ đếm này mặc định dùng [`window.requestAnimationFrame()`](https://developer.mozilla.org/en-US/docs/Web/API/window/requestAnimationFrame). Nếu viết `const timer = d3.timer(callback)`, thì cứ 1/60 giây 1 lần, trình duyệt sẽ gọi hàm callback truyền vào cho `d3.timer()`.
+
+Sourc code của d3-force trông như bên dưới đây. Vậy cứ 1/60 giây, trình duyệt sẽ gọi hàm `step()`, hàm step này gọi sự kiện `tick`.
+
+```javascript
+stepper = d3.timer(step),
+event = dispatch("tick", "end");
+
+function step() {
+  tick();
+  event.call("tick", simulation);
+  if (alpha < alphaMin) {
+    stepper.stop();
+    event.call("end", simulation);
+  }
+}
+```
+
+Việc gọi `simulation.restart()` sẽ ứng với việc gọi `d3.timer().restart()`, giúp dừng bộ timer hiện thời (ví dụ đang ở 39/60), tạo ra 1 timer mới (trở về 1/60). 
 
 <a name="simulation_stop" href="#simulation_stop">#</a> <i>simulation</i>.<b>stop</b>() [<>](https://github.com/d3/d3-force/blob/master/src/simulation.js#L84 "Source")
 
-Stops the simulation’s internal timer, if it is running, and returns the simulation. If the timer is already stopped, this method does nothing. This method is useful for running the simulation manually; see [*simulation*.tick](#simulation_tick).
+Dừng bộ đếm thời gian của mô phỏng nếu nó đang chạy, và trả về object "mô phỏng". If the timer is already stopped, this method does nothing. This method is useful for running the simulation manually; see [*simulation*.tick](#simulation_tick).
 
 <a name="simulation_tick" href="#simulation_tick">#</a> <i>simulation</i>.<b>tick</b>() [<>](https://github.com/d3/d3-force/blob/master/src/simulation.js#L38 "Source")
 
-Increments the current [*alpha*](#simulation_alpha) by ([*alphaTarget*](#simulation_alphaTarget) - *alpha*) × [*alphaDecay*](#simulation_alphaDecay); then invokes each registered [force](#simulation_force), passing the new *alpha*; then decrements each [node](#simulation_nodes)’s velocity by *velocity* × [*velocityDecay*](#simulation_velocityDecay); lastly increments each node’s position by *velocity*.
+Tăng giá trị hiện tại của [*alpha*](#simulation_alpha) by ([*alphaTarget*](#simulation_alphaTarget) - *alpha*) × [*alphaDecay*](#simulation_alphaDecay); then invokes each registered [force](#simulation_force), passing the new *alpha*; then decrements each [node](#simulation_nodes)’s velocity by *velocity* × [*velocityDecay*](#simulation_velocityDecay); lastly increments each node’s position by *velocity*.
 
 This method does not dispatch [events](#simulation_on); events are only dispatched by the internal timer when the simulation is started automatically upon [creation](#forceSimulation) or by calling [*simulation*.restart](#simulation_restart). The natural number of ticks when the simulation is started is ⌈*log*([*alphaMin*](#simulation_alphaMin)) / *log*(1 - [*alphaDecay*](#simulation_alphaDecay))⌉; by default, this is 300.
 
@@ -63,28 +91,39 @@ This method can be used in conjunction with [*simulation*.stop](#simulation_stop
 
 If *nodes* is specified, sets the simulation’s nodes to the specified array of objects, initializing their positions and velocities if necessary, and then [re-initializes](#force_initialize) any bound [forces](#simulation_force); returns the simulation. If *nodes* is not specified, returns the simulation’s array of nodes as specified to the [constructor](#forceSimulation).
 
-Each *node* must be an object. The following properties are assigned by the simulation:
+Mỗi *node* phải là một object, và object này sẽ được thêm các thuộc tính sau trong quá trình mô phỏng:
+- `index` - the node’s zero-based index into *nodes*
+- `x` - vị trí hiện tại theo trục x
+- `y` - vị trí hiện tại theo trục y
+- `vx` - tốc độ hiện tại theo trục x
+- `vy` - tốc độ hiện tại theo trục y
 
-* `index` - the node’s zero-based index into *nodes*
-* `x` - the node’s current *x*-position
-* `y` - the node’s current *y*-position
-* `vx` - the node’s current *x*-velocity
-* `vy` - the node’s current *y*-velocity
+Vị trí ⟨*x*,*y*⟩ và vận tốc ⟨*vx*,*vy*⟩ có thể lần lượt bị thay đổi bởi [lực tương tác](#forces) và mô phỏng. Nếu *vx* hoặc *vy* là NaN, thì vận tốc ban đầu được đặt là ⟨0,0⟩. If either *x* or *y* is NaN, the position is initialized in a [phyllotaxis arrangement](http://bl.ocks.org/mbostock/11478058), so chosen to ensure a deterministic, uniform distribution around the origin.
 
-The position ⟨*x*,*y*⟩ and velocity ⟨*vx*,*vy*⟩ may be subsequently modified by [forces](#forces) and by the simulation. If either *vx* or *vy* is NaN, the velocity is initialized to ⟨0,0⟩. If either *x* or *y* is NaN, the position is initialized in a [phyllotaxis arrangement](http://bl.ocks.org/mbostock/11478058), so chosen to ensure a deterministic, uniform distribution around the origin.
+Để cố định một node vào một ví trí nào đấy, người dùng thay đổi hai thuộc tính:
+- `fx` - vị trí được cố định trên trục x
+- `fy` - vị trí được cố định trên trục y
 
-To fix a node in a given position, you may specify two additional properties:
+Tại cuối mỗi [tick](#simulation_tick), khi hết các lực tương tác, node nào có giá trị của - *node*.fx khác không thì:
+  - *node*.x sẽ bị reset về giá trị của *node*.fx, còn
+  - *node*.vx bị cho thành 0; 
+- Tương tự với *node*.fy, *node*.y, và *node*.vy.
 
-* `fx` - the node’s fixed *x*-position
-* `fy` - the node’s fixed *y*-position
+Để "cởi trói" cho một node vốn bị gắn cố định lúc trước, đặt *node*.fx và *node*.fy thành null, hoặc đơn thuần là xóa hai thuộc tính này.
 
-At the end of each [tick](#simulation_tick), after the application of any forces, a node with a defined *node*.fx has *node*.x reset to this value and *node*.vx set to zero; likewise, a node with a defined *node*.fy has *node*.y reset to this value and *node*.vy set to zero. To unfix a node that was previously fixed, set *node*.fx and *node*.fy to null, or delete these properties.
-
-If the specified array of *nodes* is modified, such as when nodes are added to or removed from the simulation, this method must be called again with the new (or changed) array to notify the simulation and bound forces of the change; the simulation does not make a defensive copy of the specified array.
+Nếu thêm hoặc xóa phần tử trong mảng chứa node ban đầu, thì method trên cần phải được gọi lại (kèm theo mảng đã cập nhật mới) để thông báo cho mô phỏng biết, cũng như áp lại lực giữa các phần tử. The simulation does not make a defensive copy of the specified array.
 
 <a name="simulation_alpha" href="#simulation_alpha">#</a> <i>simulation</i>.<b>alpha</b>([<i>alpha</i>]) [<>](https://github.com/d3/d3-force/blob/master/src/simulation.js#L92 "Source")
 
-If *alpha* is specified, sets the current alpha to the specified number in the range [0,1] and returns this simulation. If *alpha* is not specified, returns the current alpha value, which defaults to 1.
+Nếu muốn tùy biến *alpha*, thì hãy đặt giá trị của nó trong khoảng [0,1] and returns this simulation. If *alpha* is not specified, returns the current alpha value, which defaults to 1.
+
+Ghi chú: Theo bài [này](https://roshansanthosh.wordpress.com/2016/09/25/forces-in-d3-js-v4/), thì:
+- "*alpha*" là một số nằm trong khoảng [0, 1], đại diện cho tiến độ hiện tại của simulation (đã giả lập xong chưa, được 10%, 50% hay 100%?)
+- Khi simulation bắt đầu, "*alpha*" được gán bằng 1, và giá trị này sẽ giảm xuống với tốc độ nhất định. Tốc độ giảm này nhanh hay chậm thì phụ thuộc vào "alphaDecay". "*alpha*" sẽ giảm cho đến "*alphaMin*". 
+- Ngay khi giá trị của "*alpha*" nhỏ hơn "*alphaMin*", simulation sẽ dừng. 
+- Giá trị mặc định của "*alphaMin*" là 0.001.
+- "*alphaTarget*" tái định nghĩa điểm dừng (đường tiêm cận), như vậy, thay vì giảm chầm chậm xuống 0, nó sẽ giảm xuống "alphaTarget=0.2".
+- "*alphaTarget*" có một vài chỗ hữu dụng, ví dụ khi cần kéo thả node, ta có thể thiết lập "*alphaTarget*" để simulation chạy liên tục tại một rate nào đó nhằm có một chuyển động mượt mà.
 
 <a name="simulation_alphaMin" href="#simulation_alphaMin">#</a> <i>simulation</i>.<b>alphaMin</b>([<i>min</i>]) [<>](https://github.com/d3/d3-force/blob/master/src/simulation.js#L96 "Source")
 
@@ -455,3 +494,114 @@ If *x* is specified, sets the *x*-coordinate of the circle center to the specifi
 <a name="radial_y" href="#radial_y">#</a> <i>radial</i>.<b>y</b>([<i>y</i>]) [<>](https://github.com/d3/d3-force/blob/master/src/radial.js "Source")
 
 If *y* is specified, sets the *y*-coordinate of the circle center to the specified number and returns this force. If *y* is not specified, returns the current *y*-coordinate of the center, which defaults to zero.
+
+## Ghi chú riêng
+
+[Eric Socolfsky - Forcing Functions: Inside D3.v4 forces and layout transitions](https://hi.stamen.com/forcing-functions-inside-d3-v4-forces-and-layout-transitions-f3e89ee02d12)
+
+Một module `d3-force` phải trả về 1 function. 
+- function là public API cho force
+- người dùng có thể nối thêm các function khác vào phía sau để thay đổi force.
+- function này được D3 gọi tự động tại mỗi "tick" của `forceSimulation` nếu force được thêm vào thông qua `forceSimulation.force()`.
+
+```javascript
+let simulation = d3.forceSimulation()
+ .force('fancyForce', fancyForceModule());
+```
+
+`force()` là một function sẽ:
+- trả về giá trị hiện tại nếu không có tham số truyền vào
+- set giá trị mới và trả về roce nếu có tham số truyền vào
+
+```javascript
+/*
+force.strength = function(_) {
+  return arguments.length ? (strength = typeof _ === "function" ? _ : constant(+_), initialize(), force) : strength;
+};
+*/
+
+force.strength = function (_) {
+  if (arguments.length) {
+    // Nếu có tham số truyền vào (tương đương việc arguments.length = 1, ứng với true)
+    if (typeof _ === "function") {
+      // Nếu tham số truyền vào là 1 function thì lưu nó lại
+      strength = _;
+    } else {
+      // Nếu nó là một constant, thì biến nó thành 1 number
+      // và bọc nó lại bên trong 1 function sẽ trả về chính số đấy
+      strength = constant(+_);
+    }
+
+    // khởi tạo lại
+    initialize();
+
+    // cho phép function chaining
+    return force;
+  } else {
+    // nếu không có tham số truyền vào 
+    // thì trả về giá trị hiện tại
+    return strength;
+  }
+};
+```
+
+```javascript
+force: function(name, _) {
+  return arguments.length > 1 ? ((_ == null ? forces.remove(name) : forces.set(name, initializeForce(_))), simulation) : forces.get(name);
+},
+
+if (arguments.length > 1) {
+  // Nếu có 2 tham số truyền vào (tương đương việc arguments.length bằng 2)
+  if (_ == null) {
+    // Nếu force-module bằng null, thì remove module này ra khỏi force
+    forces.remove(name);
+  } else {
+    forces.set(name, initializeForce(_))
+  }
+
+  return simulation;
+} else {
+  // nếu không có đủ 2 tham số
+  return forces.get(name);
+}
+```
+
+Để đọc hiểu source code của `d3-force`, cần hiểu:
+- Đầu tiên là 3 dependencies: (1) [`d3-dispatch`](https://github.com/d3/d3-dispatch), (2) [`d3-collection`](https://github.com/d3/d3-collection), và (3) [`d3-timer`]().
+- Simulation
+- Force modules
+
+### Ba (03) dependencies
+
+- `d3-dispatch` giúp đăng ký 2 sự kiện mang tên "tick" và "end" vào hệ thống.
+  - Đầu tiên là tạo 2 sự kiện nói trên `event = dispatch("tick", "end");`.  - Sau đó đăng ký mỗi event với 1 hàm callback, ví dụ `event.on("tick", callback1)`, hoặc `event.on("end", callback2)`. Hàm "callback1" hoặc "callback2" là do người dùng định nghĩa, ví dụ `simulation.on("tick", tickEventHandler)`, thì `tickEventHandler` là 1 callback.
+  - Cuối cùng khi cần thì gọi sự kiện đấy ra: `event.call("tick", simulation)`, hoặc `event.call("end", simulation)`. Ở đây sử dụng cơ chế của [function.call](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Function/call).
+
+- `d3-collection` chỉ là một thư viện nhỏ mà Mike Bostock viết ra để xử lý các objects trong D3js một cách dễ dàng hơn việc dùng JavaScript thuần.
+
+- `d3-timer` là một bộ đếm thời gian mà object "simulation* của d3-force sử dụng. Bộ đếm này mặc định dùng [`window.requestAnimationFrame()`](https://developer.mozilla.org/en-US/docs/Web/API/window/requestAnimationFrame). Nếu viết `const timer = d3.timer(callback)`, thì cứ 1/60 giây 1 lần, trình duyệt sẽ gọi hàm callback truyền vào cho `d3.timer()`.
+
+### Simulation
+
+### Force Module
+
+Source code phần `d3-force` của D3.js
+
+| # | Tên file  | Phân loại | Mô tả | Ghi chú |
+|---|---        |---        |---        |--- |
+| 1 | center.js | Force Module | Tạo các lực hướng tâm của svg | 
+| 2 | collide.js | Force Module | Tạo các lực giúp nodes không chạm nhau
+| 3 | constant.js | Utils | 
+| 4 | jiggle.js   | Utils |
+| 5 | link.js     | Force Module |
+| 6 | manyBody.js | Force Module |
+| 7 | radial.js    | Force Module | 
+| 8 | simulation.js | Simulation Module |
+| 9 | x.js    | Force Module |
+| 10 | y.js     | Force Module |
+
+
+Tham khảo:
+- [Shirley Wu - Understanding the Force](https://medium.com/@sxywu/understanding-the-force-ef1237017d5). Dated Jul 10, 2015. Version of D3js: 3.
+
+
